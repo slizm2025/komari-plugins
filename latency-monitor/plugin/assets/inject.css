@@ -1,0 +1,258 @@
+/* Komari Latency & Packet Loss Monitor - Homepage Card Injection Styles */
+
+.klm-panel {
+  --klm-box-bg: #f8fafc;
+  --klm-box-border: rgba(15, 23, 42, 0.07);
+  --klm-divider: rgba(15, 23, 42, 0.08);
+  --klm-title: #64748b;
+  --klm-label: #334155;
+  --klm-value: #334155;
+  --klm-muted: #94a3b8;
+  --klm-pill-good: #2e9d63;
+  --klm-pill-warn: #eab308;
+  --klm-pill-critical: #e14366;
+  --klm-pill-empty: #d4dae3;
+  --klm-text-good: #1f8a52;
+  --klm-text-warn: #d97706;
+  --klm-text-critical: #dc264c;
+
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--klm-divider);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+  text-align: left;
+  line-height: 1.35;
+}
+
+.klm-panel.klm-dark {
+  --klm-box-bg: rgba(255, 255, 255, 0.035);
+  --klm-box-border: rgba(255, 255, 255, 0.08);
+  --klm-divider: rgba(255, 255, 255, 0.09);
+  --klm-title: #94a3b8;
+  --klm-label: #cbd5e1;
+  --klm-value: #e2e8f0;
+  --klm-muted: #64748b;
+  --klm-pill-good: #22c55e;
+  --klm-pill-warn: #f59e0b;
+  --klm-pill-critical: #f43f5e;
+  --klm-pill-empty: rgba(148, 163, 184, 0.22);
+  --klm-text-good: #4ade80;
+  --klm-text-warn: #fbbf24;
+  --klm-text-critical: #fb7185;
+}
+
+.klm-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+@media (max-width: 480px) {
+  .klm-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.klm-col {
+  min-width: 0;
+  background: var(--klm-box-bg);
+  border: 1px solid var(--klm-box-border);
+  border-radius: 9px;
+  padding: 8px 10px 9px;
+  box-sizing: border-box;
+}
+
+.klm-col-title {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--klm-title);
+  margin: 0 0 7px 0;
+  letter-spacing: 0.01em;
+}
+
+.klm-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.klm-row {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.klm-row-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  min-width: 0;
+}
+
+.klm-row-name {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+  font-size: 11.5px;
+  color: var(--klm-label);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.klm-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  flex: 0 0 auto;
+}
+
+.klm-row-label-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.klm-row-val {
+  flex: 0 0 auto;
+  font-size: 11.5px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--klm-value);
+  white-space: nowrap;
+}
+
+.klm-row-val.klm-st-good {
+  color: var(--klm-value);
+}
+
+.klm-row-val.klm-loss-accent-good {
+  color: var(--klm-text-good);
+}
+
+.klm-row-val.klm-st-warn {
+  color: var(--klm-text-warn);
+}
+
+.klm-row-val.klm-st-critical,
+.klm-row-val.klm-st-timeout {
+  color: var(--klm-text-critical);
+}
+
+.klm-row-val.klm-st-empty {
+  color: var(--klm-muted);
+  font-weight: 500;
+}
+
+.klm-bars {
+  display: grid;
+  grid-template-columns: repeat(var(--klm-buckets, 20), minmax(0, 1fr));
+  gap: 2px;
+  align-items: center;
+}
+
+.klm-pill {
+  display: block;
+  width: 100%;
+  height: 10px;
+  border-radius: 2.5px;
+  background: var(--klm-pill-empty);
+  transition: transform 0.12s ease, filter 0.12s ease;
+  cursor: default;
+}
+
+.klm-pill:hover {
+  transform: scaleY(1.22);
+  filter: brightness(1.08);
+}
+
+.klm-pill.klm-st-good {
+  background: var(--klm-pill-good);
+}
+
+.klm-pill.klm-st-warn {
+  background: var(--klm-pill-warn);
+}
+
+.klm-pill.klm-st-critical,
+.klm-pill.klm-st-timeout {
+  background: var(--klm-pill-critical);
+}
+
+.klm-pill.klm-st-empty {
+  background: var(--klm-pill-empty);
+}
+
+.klm-footer {
+  margin-top: 6px;
+  font-size: 10.5px;
+  color: var(--klm-muted);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+/* Global floating tooltip (escapes card overflow:hidden) */
+#klm-tooltip {
+  position: fixed;
+  z-index: 2147483640;
+  pointer-events: none;
+  opacity: 0;
+  transform: translateY(3px);
+  transition: opacity 0.12s ease, transform 0.12s ease;
+  background: rgba(15, 23, 42, 0.94);
+  color: #f8fafc;
+  border: 1px solid rgba(148, 163, 184, 0.24);
+  border-radius: 8px;
+  padding: 7px 10px;
+  font-size: 11.5px;
+  line-height: 1.45;
+  box-shadow: 0 10px 28px rgba(2, 6, 23, 0.34);
+  max-width: 260px;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "PingFang SC", sans-serif;
+  backdrop-filter: blur(8px);
+}
+
+#klm-tooltip.klm-tip-visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+#klm-tooltip .klm-tip-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  font-weight: 600;
+  margin-bottom: 3px;
+  color: #ffffff;
+}
+
+#klm-tooltip .klm-tip-time {
+  color: #94a3b8;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  margin-bottom: 4px;
+}
+
+#klm-tooltip .klm-tip-line {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+#klm-tooltip .klm-tip-k {
+  color: #94a3b8;
+}
+
+#klm-tooltip .klm-tip-v {
+  font-weight: 600;
+}

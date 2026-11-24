@@ -1,0 +1,243 @@
+{
+  "name": {
+    "zh_CN": "延迟与丢包可用性监控",
+    "zh-CN": "延迟与丢包可用性监控",
+    "en": "Latency & Packet Loss Monitor"
+  },
+  "short": "latency-monitor",
+  "description": {
+    "zh_CN": "复用 Komari 原生 Ping 任务，按时间分桶计算各节点延迟、丢包率与可用性；在首页节点卡片底部注入双栏胶囊色块条（延迟 + 丢包），并附带独立监控总览与三网/节点互探快捷配置页。",
+    "zh-CN": "复用 Komari 原生 Ping 任务，按时间分桶计算各节点延迟、丢包率与可用性；在首页节点卡片底部注入双栏胶囊色块条（延迟 + 丢包），并附带独立监控总览与三网/节点互探快捷配置页。",
+    "en": "Aggregates native Komari Ping tasks into time-bucketed latency, packet loss, and availability windows; injects a dual-column pill bar panel onto homepage server cards plus a standalone overview and preset task manager."
+  },
+  "author": "slizm",
+  "version": "1.0.2",
+  "komari": ">=1.5.0",
+  "entry": "script.js",
+  "permissions": {
+    "node": false,
+    "allowSystemRPC": true,
+    "allowRoutes": true,
+    "allowHTMLInject": true,
+    "timeout": 30,
+    "maxHTTPBodyBytes": 262144
+  },
+  "configuration": {
+    "type": "managed",
+    "data": [
+      {
+        "type": "title",
+        "name": {
+          "zh_CN": "时间窗口与分桶参数",
+          "zh-CN": "时间窗口与分桶参数",
+          "en": "Time Window & Bucketing"
+        }
+      },
+      {
+        "key": "window_hours",
+        "type": "select",
+        "options": "1,2,3,6,12,24",
+        "default": "1",
+        "name": {
+          "zh_CN": "默认统计时间窗口（小时）",
+          "zh-CN": "默认统计时间窗口（小时）",
+          "en": "Default Time Window (Hours)"
+        },
+        "help": {
+          "zh_CN": "首页节点卡片默认展示最近 N 小时的延迟与丢包胶囊条，默认 1 小时",
+          "zh-CN": "首页节点卡片默认展示最近 N 小时的延迟与丢包胶囊条，默认 1 小时",
+          "en": "Time range displayed on homepage node cards (default: 1 hour)"
+        }
+      },
+      {
+        "key": "bucket_count",
+        "type": "number",
+        "default": 20,
+        "name": {
+          "zh_CN": "时间分桶数（胶囊块数量）",
+          "zh-CN": "时间分桶数（胶囊块数量）",
+          "en": "Bucket Count (Pill Bars)"
+        },
+        "help": {
+          "zh_CN": "每条线路展示的胶囊色块个数（建议 16~24，默认 20；1 小时 20 桶即每桶 3 分钟）",
+          "zh-CN": "每条线路展示的胶囊色块个数（建议 16~24，默认 20；1 小时 20 桶即每桶 3 分钟）",
+          "en": "Number of pill blocks per probe row (recommended 16-24, default 20)"
+        }
+      },
+      {
+        "key": "cache_ttl_seconds",
+        "type": "number",
+        "default": 15,
+        "name": {
+          "zh_CN": "后端聚合缓存时间（秒）",
+          "zh-CN": "后端聚合缓存时间（秒）",
+          "en": "Backend Cache TTL (Seconds)"
+        },
+        "help": {
+          "zh_CN": "避免高频访问重复查询 metrics.db，默认 15 秒（范围 5~120）",
+          "zh-CN": "避免高频访问重复查询 metrics.db，默认 15 秒（范围 5~120）",
+          "en": "In-memory aggregation cache TTL to avoid excessive DB queries (5-120s)"
+        }
+      },
+      {
+        "type": "title",
+        "name": {
+          "zh_CN": "首页卡片注入与展示控制",
+          "zh-CN": "首页卡片注入与展示控制",
+          "en": "Homepage Card Injection"
+        }
+      },
+      {
+        "key": "inject_home_cards",
+        "type": "switch",
+        "default": true,
+        "name": {
+          "zh_CN": "在首页节点卡片底部注入延迟与丢包面板",
+          "zh-CN": "在首页节点卡片底部注入延迟与丢包面板",
+          "en": "Inject Panel into Homepage Node Cards"
+        },
+        "help": {
+          "zh_CN": "关闭后仅保留独立总览页与 REST API，不对 Komari 首页 DOM 做任何注入",
+          "zh-CN": "关闭后仅保留独立总览页与 REST API，不对 Komari 首页 DOM 做任何注入",
+          "en": "Disable to keep only the standalone overview page and REST API"
+        }
+      },
+      {
+        "key": "selected_tasks",
+        "type": "pingtasks",
+        "default": [],
+        "name": {
+          "zh_CN": "限定展示的 Ping 任务（留空表示全部）",
+          "zh-CN": "限定展示的 Ping 任务（留空表示全部）",
+          "en": "Selected Ping Tasks (Empty = All)"
+        },
+        "help": {
+          "zh_CN": "可勾选仅在卡片展示的监测任务；留空则按任务权重自动展示绑定到该节点的任务",
+          "zh-CN": "可勾选仅在卡片展示的监测任务；留空则按任务权重自动展示绑定到该节点的任务",
+          "en": "Leave empty to show all ping tasks assigned to each node"
+        }
+      },
+      {
+        "key": "card_max_tasks",
+        "type": "number",
+        "default": 4,
+        "name": {
+          "zh_CN": "首页每张卡片最多展示线路数",
+          "zh-CN": "首页每张卡片最多展示线路数",
+          "en": "Max Probe Rows per Homepage Card"
+        },
+        "help": {
+          "zh_CN": "防止线路过多拉长卡片高度（默认 4 条，如三网 + 节点互探；独立总览页始终展示全部）",
+          "zh-CN": "防止线路过多拉长卡片高度（默认 4 条，如三网 + 节点互探；独立总览页始终展示全部）",
+          "en": "Limits rows injected on homepage cards (default 4); overview page shows all"
+        }
+      },
+      {
+        "key": "refresh_interval_seconds",
+        "type": "number",
+        "default": 30,
+        "name": {
+          "zh_CN": "前端自动刷新间隔（秒）",
+          "zh-CN": "前端自动刷新间隔（秒）",
+          "en": "Frontend Auto-Refresh Interval (Seconds)"
+        },
+        "help": {
+          "zh_CN": "首页注入面板与总览页轮询刷新的间隔（默认 30 秒，页面切到后台自动暂停）",
+          "zh-CN": "首页注入面板与总览页轮询刷新的间隔（默认 30 秒，页面切到后台自动暂停）",
+          "en": "Polling interval in seconds (default 30, pauses when tab is hidden)"
+        }
+      },
+      {
+        "type": "title",
+        "name": {
+          "zh_CN": "颜色阈值（延迟 / 丢包）",
+          "zh-CN": "颜色阈值（延迟 / 丢包）",
+          "en": "Color Thresholds"
+        }
+      },
+      {
+        "key": "latency_warn_ms",
+        "type": "number",
+        "default": 300,
+        "name": {
+          "zh_CN": "延迟警告阈值（ms，黄色）",
+          "zh-CN": "延迟警告阈值（ms，黄色）",
+          "en": "Latency Warning Threshold (ms)"
+        },
+        "help": {
+          "zh_CN": "低于该值显示绿色，高于等于该值且低于高危阈值显示黄色（跨境线路建议 280~350 ms）",
+          "zh-CN": "低于该值显示绿色，高于等于该值且低于高危阈值显示黄色（跨境线路建议 280~350 ms）",
+          "en": "Latency >= this value turns amber (default 300 ms for cross-border VPS)"
+        }
+      },
+      {
+        "key": "latency_critical_ms",
+        "type": "number",
+        "default": 500,
+        "name": {
+          "zh_CN": "延迟高危阈值（ms，红色）",
+          "zh-CN": "延迟高危阈值（ms，红色）",
+          "en": "Latency Critical Threshold (ms)"
+        },
+        "help": {
+          "zh_CN": "高于等于该值或探测超时显示红色（默认 500 ms）",
+          "zh-CN": "高于等于该值或探测超时显示红色（默认 500 ms）",
+          "en": "Latency >= this value or timeout turns red (default 500 ms)"
+        }
+      },
+      {
+        "key": "loss_warn_percent",
+        "type": "number",
+        "default": 1,
+        "name": {
+          "zh_CN": "丢包警告阈值（%，黄色）",
+          "zh-CN": "丢包警告阈值（%，黄色）",
+          "en": "Packet Loss Warning Threshold (%)"
+        },
+        "help": {
+          "zh_CN": "丢包率为 0% 显示绿色，达到警告阈值显示黄色（默认 1%）",
+          "zh-CN": "丢包率为 0% 显示绿色，达到警告阈值显示黄色（默认 1%）",
+          "en": "Loss >= this value turns amber (default 1%)"
+        }
+      },
+      {
+        "key": "loss_critical_percent",
+        "type": "number",
+        "default": 10,
+        "name": {
+          "zh_CN": "丢包高危阈值（%，红色）",
+          "zh-CN": "丢包高危阈值（%，红色）",
+          "en": "Packet Loss Critical Threshold (%)"
+        },
+        "help": {
+          "zh_CN": "丢包率高于等于该值显示红色（默认 10%）",
+          "zh-CN": "丢包率高于等于该值显示红色（默认 10%）",
+          "en": "Loss >= this value turns red (default 10%)"
+        }
+      }
+    ]
+  },
+  "pages": [
+    {
+      "file": "pages/index.html",
+      "title": {
+        "zh_CN": "延迟与丢包监控",
+        "zh-CN": "延迟与丢包监控",
+        "en": "Latency & Loss"
+      },
+      "type": "iframe",
+      "visibility": "admin"
+    },
+    {
+      "file": "pages/index.html",
+      "title": {
+        "zh_CN": "延迟与丢包监控",
+        "zh-CN": "延迟与丢包监控",
+        "en": "Latency & Loss"
+      },
+      "type": "iframe",
+      "visibility": "public"
+    }
+  ],
+  "url": "https://github.com/slizm2025/komari-plugins"
+}

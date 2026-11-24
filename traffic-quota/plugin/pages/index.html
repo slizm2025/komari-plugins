@@ -1,0 +1,725 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+  <title>Komari 月度流量配额监控</title>
+  <style>
+    :root {
+      --bg: #f4f6f9;
+      --surface: #ffffff;
+      --sub: #f8fafc;
+      --border: rgba(15, 23, 42, 0.08);
+      --text: #0f172a;
+      --secondary: #475569;
+      --muted: #94a3b8;
+      --accent: #2563eb;
+      --track: rgba(15, 23, 42, 0.08);
+      --ok: #22c55e;
+      --warn: #f59e0b;
+      --crit: #e14366;
+      --text-ok: #15803d;
+      --text-warn: #d97706;
+      --text-crit: #dc264c;
+      --shadow: 0 1px 3px rgba(15, 23, 42, 0.05), 0 6px 20px rgba(15, 23, 42, 0.04);
+    }
+
+    body.dark {
+      --bg: #0b1120;
+      --surface: #111827;
+      --sub: rgba(255, 255, 255, 0.035);
+      --border: rgba(255, 255, 255, 0.09);
+      --text: #f1f5f9;
+      --secondary: #cbd5e1;
+      --muted: #64748b;
+      --accent: #3b82f6;
+      --track: rgba(255, 255, 255, 0.1);
+      --ok: #22c55e;
+      --warn: #fbbf24;
+      --crit: #f43f5e;
+      --text-ok: #4ade80;
+      --text-warn: #fbbf24;
+      --text-crit: #fb7185;
+      --shadow: 0 8px 28px rgba(0, 0, 0, 0.34);
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      padding: 20px;
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+      line-height: 1.45;
+    }
+
+    .container { max-width: 1320px; margin: 0 auto; }
+
+    .topbar {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 18px;
+    }
+
+    .topbar h1 { margin: 0; font-size: 20px; font-weight: 700; }
+    .topbar p { margin: 3px 0 0; font-size: 12.5px; color: var(--muted); }
+
+    .toolbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+
+    .btn, .input {
+      height: 33px;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      background: var(--surface);
+      color: var(--text);
+      font-size: 12.5px;
+      padding: 0 12px;
+    }
+
+    .btn { cursor: pointer; font-weight: 500; display: inline-flex; align-items: center; gap: 6px; }
+    .btn:hover { border-color: var(--accent); }
+    .btn-primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+    .btn-sm { height: 27px; padding: 0 9px; font-size: 11.5px; }
+
+    .kpis {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 12px;
+      margin-bottom: 18px;
+    }
+    @media (max-width: 820px) { .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+
+    .kpi {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 13px 16px;
+      box-shadow: var(--shadow);
+    }
+    .kpi-label { font-size: 12px; color: var(--muted); }
+    .kpi-value { margin-top: 4px; font-size: 21px; font-weight: 700; font-variant-numeric: tabular-nums; }
+    .kpi-sub { margin-top: 2px; font-size: 11.5px; color: var(--muted); }
+
+    .cards {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 16px;
+    }
+    @media (max-width: 960px) { .cards { grid-template-columns: minmax(0, 1fr); } }
+
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 16px;
+      box-shadow: var(--shadow);
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .card-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+    }
+
+    .node-title { display: flex; align-items: center; gap: 8px; min-width: 0; }
+    .node-name { font-size: 16px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+    .pill-tag {
+      font-size: 11px;
+      font-weight: 600;
+      padding: 2px 8px;
+      border-radius: 999px;
+      background: var(--sub);
+      border: 1px solid var(--border);
+      color: var(--secondary);
+      white-space: nowrap;
+    }
+    .pill-online { background: rgba(34, 197, 94, 0.13); border-color: transparent; color: var(--text-ok); }
+    .pill-offline { background: rgba(244, 63, 94, 0.13); border-color: transparent; color: var(--text-crit); }
+
+    .stat-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 10px;
+    }
+
+    .stat-box {
+      background: var(--sub);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 10px 11px;
+    }
+    .stat-k { font-size: 11px; color: var(--muted); }
+    .stat-v { margin-top: 3px; font-size: 16px; font-weight: 700; font-variant-numeric: tabular-nums; }
+    .v-ok { color: var(--text-ok); }
+    .v-warn { color: var(--text-warn); }
+    .v-crit { color: var(--text-crit); }
+
+    .progress-wrap { display: flex; flex-direction: column; gap: 5px; }
+    .progress-head { display: flex; justify-content: space-between; font-size: 12px; color: var(--secondary); font-variant-numeric: tabular-nums; }
+    .track { width: 100%; height: 9px; border-radius: 999px; background: var(--track); overflow: hidden; }
+    .fill { height: 100%; border-radius: 999px; transition: width 0.35s ease; }
+    .fill.ok { background: var(--ok); }
+    .fill.warn { background: var(--warn); }
+    .fill.critical, .fill.exceeded { background: var(--crit); }
+
+    .meta-row {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: space-between;
+      gap: 8px;
+      font-size: 12px;
+      color: var(--secondary);
+      font-variant-numeric: tabular-nums;
+    }
+
+    .spark-wrap {
+      background: var(--sub);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 8px 10px;
+    }
+    .spark-head {
+      display: flex;
+      justify-content: space-between;
+      font-size: 11px;
+      color: var(--muted);
+      margin-bottom: 6px;
+    }
+    .spark-bars {
+      display: flex;
+      align-items: flex-end;
+      gap: 3px;
+      height: 44px;
+    }
+    .spark-bar {
+      flex: 1;
+      min-width: 4px;
+      border-radius: 3px 3px 1px 1px;
+      background: var(--accent);
+      opacity: 0.78;
+      transition: opacity 0.12s;
+    }
+    .spark-bar:hover { opacity: 1; }
+    .spark-bar.zero { background: var(--track); opacity: 1; }
+
+    .unconf-box {
+      background: var(--sub);
+      border: 1px dashed var(--border);
+      border-radius: 10px;
+      padding: 18px 14px;
+      font-size: 12.5px;
+      color: var(--secondary);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    /* Config Modal */
+    .modal-backdrop {
+      position: fixed;
+      inset: 0;
+      background: rgba(2, 6, 23, 0.55);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 5000;
+      padding: 16px;
+    }
+    .modal-backdrop.open { display: flex; }
+
+    .modal {
+      width: 100%;
+      max-width: 960px;
+      max-height: 88vh;
+      overflow-y: auto;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 18px 20px;
+      box-shadow: 0 24px 60px rgba(0, 0, 0, 0.35);
+    }
+
+    .modal-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 10px;
+    }
+    .modal-head h2 { margin: 0; font-size: 16px; }
+
+    .hint {
+      font-size: 12px;
+      color: var(--secondary);
+      background: var(--sub);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 9px 11px;
+      margin-bottom: 12px;
+    }
+
+    .tbl {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 12.5px;
+    }
+    .tbl th, .tbl td {
+      border-bottom: 1px solid var(--border);
+      padding: 8px 6px;
+      text-align: left;
+      vertical-align: middle;
+    }
+    .tbl th { color: var(--muted); font-weight: 500; white-space: nowrap; }
+    .tbl input[type="number"], .tbl input[type="text"], .tbl select {
+      height: 30px;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+      background: var(--sub);
+      color: var(--text);
+      padding: 0 7px;
+      font-size: 12px;
+    }
+
+    .quota-group { display: flex; gap: 4px; align-items: center; }
+
+    .toast {
+      margin-top: 12px;
+      padding: 8px 12px;
+      border-radius: 8px;
+      font-size: 12.5px;
+      display: none;
+    }
+    .toast.ok { display: block; background: rgba(34, 197, 94, 0.14); color: var(--text-ok); }
+    .toast.err { display: block; background: rgba(244, 63, 94, 0.14); color: var(--text-crit); }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="topbar">
+      <div>
+        <h1>月度流量配额监控</h1>
+        <p id="subtitle">每台 VPS 独立账单重置日 · 防重启清零持久化账本</p>
+      </div>
+      <div class="toolbar">
+        <button class="btn" id="refreshBtn">立即采样刷新</button>
+        <button class="btn" id="themeBtn">深/浅色</button>
+        <button class="btn btn-primary" id="configBtn" style="display:none;">配置各节点配额</button>
+      </div>
+    </div>
+
+    <div class="kpis">
+      <div class="kpi">
+        <div class="kpi-label">已配额节点</div>
+        <div class="kpi-value" id="kpiConfigured">-</div>
+        <div class="kpi-sub" id="kpiNodesSub">共 - 台节点</div>
+      </div>
+      <div class="kpi">
+        <div class="kpi-label">本期合计已用</div>
+        <div class="kpi-value" id="kpiUsed">-</div>
+        <div class="kpi-sub" id="kpiQuotaSub">合计月额度 -</div>
+      </div>
+      <div class="kpi">
+        <div class="kpi-label">合计剩余流量</div>
+        <div class="kpi-value" id="kpiRemain">-</div>
+        <div class="kpi-sub">各已配额节点剩余总和</div>
+      </div>
+      <div class="kpi">
+        <div class="kpi-label">预警 / 超限节点</div>
+        <div class="kpi-value" id="kpiAlert">-</div>
+        <div class="kpi-sub" id="kpiThreshSub">达到高危或超限</div>
+      </div>
+    </div>
+
+    <div id="cardsRoot" class="cards"></div>
+  </div>
+
+  <!-- Admin Per-Node Quota Configuration Modal -->
+  <div class="modal-backdrop" id="configModal">
+    <div class="modal">
+      <div class="modal-head">
+        <h2>各 VPS 月度流量配额配置 <span style="font-size:11.5px;color:var(--muted);font-weight:500;">v1.0.4</span></h2>
+        <button class="btn" id="closeModalBtn">关闭</button>
+      </div>
+      <div class="hint">
+        • <strong>每月开始日期 (1–31)</strong>：支持为每台 VPS 单独设定流量重置日（例如 7 号表示每月 7 日 00:00 重置；遇小月自动对齐月末）。<br/>
+        • <strong>重新校准为 (GB)</strong>：直接填入服务商后台当前显示的真实总已用流量（例如 <code>77.02</code>），保存后按 <strong>「校准值 + 保存之后新增流量」</strong> 累加；<strong>留空表示保持当前已用不变</strong>；下个重置日自动归零。
+      </div>
+      <div style="overflow-x:auto;">
+        <table class="tbl">
+          <thead>
+            <tr>
+              <th>启用</th>
+              <th>节点</th>
+              <th>每月开始日</th>
+              <th>月度流量上限</th>
+              <th>计费方式</th>
+              <th>当前已用</th>
+              <th>重新校准为 (GB)</th>
+              <th>备注</th>
+            </tr>
+          </thead>
+          <tbody id="rulesTbody"></tbody>
+        </table>
+      </div>
+      <div style="margin-top:14px;display:flex;justify-content:flex-end;gap:8px;">
+        <button class="btn" id="cancelModalBtn">取消</button>
+        <button class="btn btn-primary" id="saveRulesBtn">保存全部配置</button>
+      </div>
+      <div id="modalToast" class="toast"></div>
+    </div>
+  </div>
+
+  <script>
+    (function () {
+      "use strict";
+
+      var API_BASE = "/api/plugin/traffic-quota";
+      var state = {
+        summary: null,
+        timer: null
+      };
+
+      function esc(s) {
+        return String(s == null ? "" : s)
+          .replace(/&/g, "&amp;")
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;")
+          .replace(/"/g, "&quot;");
+      }
+
+      function fmtBytes(bytes, unitBase) {
+        var n = Number(bytes);
+        if (!isFinite(n) || n < 0) return "--";
+        var base = unitBase === 1000 ? 1000 : 1024;
+        var units = ["B", "KB", "MB", "GB", "TB", "PB"];
+        var i = 0;
+        while (n >= base && i < units.length - 1) { n /= base; i++; }
+        var d = i <= 1 ? 0 : (n >= 100 ? 1 : 2);
+        return n.toFixed(d).replace(/\.00$/, "").replace(/(\.\d)0$/, "$1") + " " + units[i];
+      }
+
+      function syncTheme() {
+        var saved = localStorage.getItem("ktq-theme");
+        var dark = false;
+        if (saved === "dark") dark = true;
+        else if (saved === "light") dark = false;
+        else {
+          try {
+            if (window.parent && window.parent !== window && window.parent.document.documentElement.classList.contains("dark")) {
+              dark = true;
+            } else if (window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches) {
+              dark = true;
+            }
+          } catch (_) {
+            dark = window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches;
+          }
+        }
+        document.body.classList.toggle("dark", dark);
+      }
+
+      function render() {
+        var d = state.summary;
+        if (!d) return;
+        var unitBase = (d.config && d.config.unitBase) || 1024;
+        var ov = d.overview || {};
+
+        document.getElementById("subtitle").textContent =
+          "更新于 " + new Date(d.generatedAt).toLocaleTimeString() +
+          " · 基准时区 UTC" + (d.config.timezoneOffset >= 0 ? "+" : "") + d.config.timezoneOffset +
+          " · 进制 " + (unitBase === 1000 ? "1000 (GB)" : "1024 (GiB)");
+
+        document.getElementById("configBtn").style.display = d.isAdmin ? "inline-flex" : "none";
+
+        document.getElementById("kpiConfigured").textContent = ov.configuredCount != null ? ov.configuredCount : "-";
+        document.getElementById("kpiNodesSub").textContent = "共 " + (ov.nodeCount || 0) + " 台节点";
+        document.getElementById("kpiUsed").textContent = ov.configuredCount > 0 ? fmtBytes(ov.totalUsedBytes, unitBase) : "--";
+        document.getElementById("kpiQuotaSub").textContent = "合计月额度 " + (ov.totalQuotaBytes > 0 ? fmtBytes(ov.totalQuotaBytes, unitBase) : "--");
+        document.getElementById("kpiRemain").textContent = ov.configuredCount > 0 ? fmtBytes(ov.totalRemainingBytes, unitBase) : "--";
+        var alertEl = document.getElementById("kpiAlert");
+        alertEl.textContent = ov.alertCount != null ? ov.alertCount : "0";
+        alertEl.style.color = ov.alertCount > 0 ? "var(--text-crit)" : "var(--text-ok)";
+        document.getElementById("kpiThreshSub").textContent =
+          "预警 ≥ " + d.config.warnPercent + "% / 告警 ≥ " + d.config.criticalPercent + "%";
+
+        var root = document.getElementById("cardsRoot");
+        var nodes = d.nodes || [];
+        if (nodes.length === 0) {
+          root.innerHTML = '<div class="card" style="grid-column:1/-1;text-align:center;">暂无节点数据。</div>';
+          return;
+        }
+
+        var html = [];
+        for (var i = 0; i < nodes.length; i++) {
+          var n = nodes[i];
+          var tr = n.traffic;
+          var cy = n.cycle;
+          var rl = n.rule;
+          var onlinePill = n.online
+            ? '<span class="pill-tag pill-online">● 在线</span>'
+            : '<span class="pill-tag pill-offline">● 离线</span>';
+          var editBtn = d.isAdmin
+            ? '<button class="btn btn-sm edit-node-btn" data-uuid="' + esc(n.uuid) + '">配置</button>'
+            : "";
+
+          if (!n.hasQuota) {
+            html.push(
+              '<div class="card">' +
+                '<div class="card-head">' +
+                  '<div class="node-title"><span class="node-name">' + esc(n.name) + "</span>" + onlinePill + "</div>" +
+                  editBtn +
+                "</div>" +
+                '<div class="unconf-box">' +
+                  '<span>尚未配置该 VPS 的月度流量额度与开始日期（当前本周期已追踪：↑' +
+                  esc(fmtBytes(tr.trackedUpBytes, unitBase)) + " / ↓" + esc(fmtBytes(tr.trackedDownBytes, unitBase)) + "）</span>" +
+                  (d.isAdmin ? '<button class="btn btn-primary btn-sm edit-node-btn" data-uuid="' + esc(n.uuid) + '">立即配置</button>' : "") +
+                "</div>" +
+              "</div>"
+            );
+            continue;
+          }
+
+          var pct = tr.usagePercent != null ? tr.usagePercent : 0;
+          var width = Math.max(0, Math.min(100, pct));
+          var remainClass = n.status === "ok" ? "v-ok" : (n.status === "warn" ? "v-warn" : "v-crit");
+          var remainLabel = tr.overageBytes > 0 ? "已超限" : "剩余流量";
+          var remainVal = tr.overageBytes > 0 ? ("+" + fmtBytes(tr.overageBytes, unitBase)) : fmtBytes(tr.remainingBytes, unitBase);
+
+          // Daily bars (last 14 days of current cycle)
+          var series = Array.isArray(n.dailySeries) ? n.dailySeries.slice(-14) : [];
+          var maxDay = 1;
+          for (var s = 0; s < series.length; s++) {
+            if (series[s].billableBytes > maxDay) maxDay = series[s].billableBytes;
+          }
+          var barsHtml = series.map(function (pt) {
+            var h = pt.billableBytes > 0 ? Math.max(10, Math.round((pt.billableBytes / maxDay) * 100)) : 8;
+            var tip = pt.date + " · 计费 " + fmtBytes(pt.billableBytes, unitBase) +
+              " (↑" + fmtBytes(pt.upBytes, unitBase) + " / ↓" + fmtBytes(pt.downBytes, unitBase) + ")";
+            return '<div class="spark-bar' + (pt.billableBytes === 0 ? " zero" : "") + '" style="height:' + h + '%" title="' + esc(tip) + '"></div>';
+          }).join("");
+
+          var projWarn = tr.projectedBytes > tr.quotaBytes ? ' style="color:var(--text-crit);font-weight:600;"' : "";
+
+          html.push(
+            '<div class="card">' +
+              '<div class="card-head">' +
+                '<div class="node-title">' +
+                  '<span class="node-name">' + esc(n.name) + "</span>" +
+                  '<span class="pill-tag">' + esc(rl.billingModeLabel) + "</span>" +
+                  onlinePill +
+                "</div>" +
+                editBtn +
+              "</div>" +
+              '<div class="stat-grid">' +
+                '<div class="stat-box"><div class="stat-k">本期已用</div><div class="stat-v">' + esc(fmtBytes(tr.usedBytes, unitBase)) + "</div></div>" +
+                '<div class="stat-box"><div class="stat-k">' + remainLabel + '</div><div class="stat-v ' + remainClass + '">' + esc(remainVal) + "</div></div>" +
+                '<div class="stat-box"><div class="stat-k">月度限额</div><div class="stat-v">' + esc(fmtBytes(tr.quotaBytes, unitBase)) + "</div></div>" +
+              "</div>" +
+              '<div class="progress-wrap">' +
+                '<div class="progress-head">' +
+                  "<span>账单周期 " + esc(cy.startDate) + " ~ " + esc(cy.endDate) + "（每月 " + esc(rl.resetDay) + " 日重置）</span>" +
+                  "<strong>" + esc(pct.toFixed(1)) + "%</strong>" +
+                "</div>" +
+                '<div class="track"><div class="fill ' + esc(n.status) + '" style="width:' + width + '%"></div></div>' +
+              "</div>" +
+              '<div class="meta-row">' +
+                "<span>↑ 出站 " + esc(fmtBytes(tr.trackedUpBytes, unitBase)) + " · ↓ 入站 " + esc(fmtBytes(tr.trackedDownBytes, unitBase)) +
+                (rl.calibrationActive && rl.calibration
+                  ? " · 校准基准 " + esc(rl.calibration.totalGB) + " GB (+" + esc(fmtBytes(tr.deltaAfterCalibrationBytes, unitBase)) + ")"
+                  : (rl.offsetActive ? " · 校准 +" + esc(rl.offsetGB) + " GB" : "")) + "</span>" +
+                "<span>距重置剩 <strong>" + esc(cy.remainingDays) + "</strong> 天</span>" +
+              "</div>" +
+              '<div class="meta-row">' +
+                "<span>日均消耗 " + esc(fmtBytes(tr.dailyAvgBytes, unitBase)) + "/天</span>" +
+                "<span" + projWarn + ">按当前速率预计本期总计 " + esc(fmtBytes(tr.projectedBytes, unitBase)) + "</span>" +
+              "</div>" +
+              '<div class="spark-wrap">' +
+                '<div class="spark-head"><span>本期每日流量走势（悬停柱条查看明细）</span><span>最近 ' + series.length + " 天</span></div>" +
+                '<div class="spark-bars">' + barsHtml + "</div>" +
+              "</div>" +
+              (rl.note ? '<div style="font-size:11.5px;color:var(--muted);">备注：' + esc(rl.note) + "</div>" : "") +
+            "</div>"
+          );
+        }
+
+        root.innerHTML = html.join("");
+
+        var btns = root.querySelectorAll(".edit-node-btn");
+        for (var b = 0; b < btns.length; b++) {
+          btns[b].onclick = function () {
+            openConfigModal(this.getAttribute("data-uuid"));
+          };
+        }
+      }
+
+      function fetchSummary(force) {
+        fetch(API_BASE + "/summary" + (force ? "?refresh=1" : ""), { credentials: "same-origin", cache: "no-store" })
+          .then(function (r) { return r.json(); })
+          .then(function (j) {
+            if (j && j.status === "success" && j.data) {
+              state.summary = j.data;
+              render();
+              var sec = (j.data.config && j.data.config.refreshIntervalSeconds) || 30;
+              if (state.timer) clearInterval(state.timer);
+              state.timer = setInterval(function () {
+                if (!document.hidden) fetchSummary(false);
+              }, Math.max(10, sec) * 1000);
+            }
+          });
+      }
+
+      function showToast(msg, ok) {
+        var el = document.getElementById("modalToast");
+        el.textContent = msg;
+        el.className = "toast " + (ok ? "ok" : "err");
+      }
+
+      function clearToast() {
+        var el = document.getElementById("modalToast");
+        el.className = "toast";
+        el.textContent = "";
+      }
+
+      function openConfigModal(focusUuid) {
+        clearToast();
+        var modal = document.getElementById("configModal");
+        modal.classList.add("open");
+        var tbody = document.getElementById("rulesTbody");
+        tbody.innerHTML = '<tr><td colspan="8">正在加载节点配置...</td></tr>';
+
+        fetch(API_BASE + "/admin/rules", { credentials: "same-origin", cache: "no-store" })
+          .then(function (r) { return r.json(); })
+          .then(function (j) {
+            if (!j || j.status !== "success") {
+              showToast((j && j.message) || "加载配置失败", false);
+              return;
+            }
+            var nodes = j.data.nodes || [];
+            var unitBase = (j.data.config && j.data.config.unitBase) || 1024;
+            var factorTB = unitBase === 1000 ? 1000 : 1024;
+
+            tbody.innerHTML = nodes.map(function (n) {
+              var rl = n.rule;
+              var isTB = rl.monthlyQuotaGB >= factorTB && (rl.monthlyQuotaGB % factorTB === 0);
+              var displayQuota = isTB ? (rl.monthlyQuotaGB / factorTB) : (rl.monthlyQuotaGB || "");
+              var highlight = focusUuid && focusUuid === n.uuid ? ' style="background:rgba(37,99,235,0.08);"' : "";
+              var curUsedStr = fmtBytes(n.traffic.usedBytes, unitBase);
+              return (
+                '<tr data-uuid="' + esc(n.uuid) + '"' + highlight + ">" +
+                  '<td><input type="checkbox" class="r-enabled"' + (rl.enabled ? " checked" : "") + " /></td>" +
+                  "<td><strong>" + esc(n.name) + "</strong></td>" +
+                  '<td><input type="number" class="r-day" min="1" max="31" value="' + esc(rl.resetDay || 1) + '" style="width:64px;" /></td>' +
+                  '<td><div class="quota-group">' +
+                    '<input type="number" class="r-quota" min="0" step="any" value="' + esc(displayQuota) + '" placeholder="如 500" style="width:82px;" />' +
+                    '<select class="r-unit" style="width:62px;"><option value="GB"' + (!isTB ? " selected" : "") + '>GB</option><option value="TB"' + (isTB ? " selected" : "") + ">TB</option></select>" +
+                  "</div></td>" +
+                  '<td><select class="r-mode" style="width:120px;">' +
+                    '<option value="sum"' + (rl.billingMode === "sum" ? " selected" : "") + ">双向 (入+出)</option>" +
+                    '<option value="out"' + (rl.billingMode === "out" ? " selected" : "") + ">仅出站 (上传)</option>" +
+                    '<option value="in"' + (rl.billingMode === "in" ? " selected" : "") + ">仅入站 (下载)</option>" +
+                    '<option value="max"' + (rl.billingMode === "max" ? " selected" : "") + ">取单向较大值</option>" +
+                  "</select></td>" +
+                  '<td style="white-space:nowrap;font-variant-numeric:tabular-nums;font-weight:600;color:var(--secondary);">' + esc(curUsedStr) + "</td>" +
+                  '<td><input type="number" class="r-cal" min="0" step="any" value="" placeholder="留空不改" style="width:110px;" /></td>' +
+                  '<td><input type="text" class="r-note" value="' + esc(rl.note || "") + '" placeholder="可选备注" style="width:105px;" /></td>' +
+                "</tr>"
+              );
+            }).join("");
+
+            // Auto-check "启用" when user fills in a positive monthly quota
+            var quotaInputs = tbody.querySelectorAll(".r-quota");
+            for (var qi = 0; qi < quotaInputs.length; qi++) {
+              quotaInputs[qi].oninput = function () {
+                var row = this.closest("tr");
+                var val = Number(this.value);
+                if (row && val > 0) {
+                  var cb = row.querySelector(".r-enabled");
+                  if (cb && !cb.checked) cb.checked = true;
+                }
+              };
+            }
+          });
+      }
+
+      function saveRules() {
+        clearToast();
+        var unitBase = (state.summary && state.summary.config && state.summary.config.unitBase) || 1024;
+        var factorTB = unitBase === 1000 ? 1000 : 1024;
+        var trs = document.querySelectorAll("#rulesTbody tr[data-uuid]");
+        var rules = {};
+
+        for (var i = 0; i < trs.length; i++) {
+          var tr = trs[i];
+          var uuid = tr.getAttribute("data-uuid");
+          var enabled = tr.querySelector(".r-enabled").checked;
+          var resetDay = Number(tr.querySelector(".r-day").value) || 1;
+          var quotaVal = Number(tr.querySelector(".r-quota").value) || 0;
+          var unit = tr.querySelector(".r-unit").value;
+          var monthlyQuotaGB = unit === "TB" ? quotaVal * factorTB : quotaVal;
+          var billingMode = tr.querySelector(".r-mode").value;
+          var calRaw = tr.querySelector(".r-cal").value.trim();
+          var note = tr.querySelector(".r-note").value.trim();
+
+          var entry = {
+            enabled: enabled,
+            resetDay: resetDay,
+            monthlyQuotaGB: monthlyQuotaGB,
+            billingMode: billingMode,
+            note: note
+          };
+          if (calRaw !== "") {
+            entry.calibrateTotalGB = Number(calRaw);
+          }
+          rules[uuid] = entry;
+        }
+
+        fetch(API_BASE + "/admin/rules", {
+          method: "POST",
+          credentials: "same-origin",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ rules: rules })
+        })
+          .then(function (r) { return r.json(); })
+          .then(function (j) {
+            if (j && j.status === "success" && j.data) {
+              state.summary = j.data;
+              render();
+              showToast("配置已保存并立即生效！首页卡片进度条已同步更新。", true);
+            } else {
+              showToast((j && j.message) || "保存失败", false);
+            }
+          })
+          .catch(function (err) {
+            showToast("请求异常：" + err.message, false);
+          });
+      }
+
+      document.getElementById("refreshBtn").onclick = function () { fetchSummary(true); };
+      document.getElementById("themeBtn").onclick = function () {
+        var next = !document.body.classList.contains("dark");
+        document.body.classList.toggle("dark", next);
+        localStorage.setItem("ktq-theme", next ? "dark" : "light");
+      };
+      document.getElementById("configBtn").onclick = function () { openConfigModal(null); };
+      document.getElementById("closeModalBtn").onclick = function () { document.getElementById("configModal").classList.remove("open"); };
+      document.getElementById("cancelModalBtn").onclick = function () { document.getElementById("configModal").classList.remove("open"); };
+      document.getElementById("configModal").onclick = function (e) {
+        if (e.target === this) this.classList.remove("open");
+      };
+      document.getElementById("saveRulesBtn").onclick = saveRules;
+
+      syncTheme();
+      fetchSummary(false);
+    })();
+  </script>
+</body>
+</html>

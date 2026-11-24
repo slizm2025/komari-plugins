@@ -1,0 +1,1078 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Komari 延迟与丢包可用性监控</title>
+  <style>
+    :root {
+      --bg: #f4f6f9;
+      --surface: #ffffff;
+      --sub-surface: #f8fafc;
+      --border: rgba(15, 23, 42, 0.08);
+      --text: #0f172a;
+      --text-secondary: #475569;
+      --muted: #94a3b8;
+      --accent: #2563eb;
+      --pill-good: #2e9d63;
+      --pill-warn: #eab308;
+      --pill-critical: #e14366;
+      --pill-empty: #d4dae3;
+      --text-good: #15803d;
+      --text-warn: #d97706;
+      --text-critical: #dc264c;
+      --shadow: 0 1px 3px rgba(15, 23, 42, 0.05), 0 6px 20px rgba(15, 23, 42, 0.04);
+    }
+
+    body.dark {
+      --bg: #0b1120;
+      --surface: #111827;
+      --sub-surface: rgba(255, 255, 255, 0.035);
+      --border: rgba(255, 255, 255, 0.09);
+      --text: #f1f5f9;
+      --text-secondary: #cbd5e1;
+      --muted: #64748b;
+      --accent: #3b82f6;
+      --pill-good: #22c55e;
+      --pill-warn: #f59e0b;
+      --pill-critical: #f43f5e;
+      --pill-empty: rgba(148, 163, 184, 0.22);
+      --text-good: #4ade80;
+      --text-warn: #fbbf24;
+      --text-critical: #fb7185;
+      --shadow: 0 8px 28px rgba(0, 0, 0, 0.32);
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      padding: 20px;
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+      line-height: 1.45;
+    }
+
+    .container {
+      max-width: 1320px;
+      margin: 0 auto;
+    }
+
+    .topbar {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 18px;
+    }
+
+    .title-group h1 {
+      margin: 0;
+      font-size: 20px;
+      font-weight: 700;
+      letter-spacing: -0.01em;
+    }
+
+    .title-group p {
+      margin: 3px 0 0;
+      font-size: 12.5px;
+      color: var(--muted);
+    }
+
+    .toolbar {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .seg {
+      display: inline-flex;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 9px;
+      padding: 2px;
+    }
+
+    .seg button {
+      border: 0;
+      background: transparent;
+      color: var(--text-secondary);
+      padding: 5px 10px;
+      border-radius: 7px;
+      font-size: 12px;
+      font-weight: 500;
+      cursor: pointer;
+    }
+
+    .seg button.active {
+      background: var(--accent);
+      color: #ffffff;
+    }
+
+    .input, .btn {
+      height: 32px;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      background: var(--surface);
+      color: var(--text);
+      font-size: 12.5px;
+      padding: 0 11px;
+    }
+
+    .input {
+      width: 170px;
+      outline: none;
+    }
+
+    .input:focus {
+      border-color: var(--accent);
+    }
+
+    .btn {
+      cursor: pointer;
+      font-weight: 500;
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+    }
+
+    .btn:hover {
+      border-color: var(--accent);
+    }
+
+    .btn-primary {
+      background: var(--accent);
+      color: #ffffff;
+      border-color: var(--accent);
+    }
+
+    .btn-danger {
+      color: var(--text-critical);
+    }
+
+    .kpis {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 12px;
+      margin-bottom: 18px;
+    }
+
+    @media (max-width: 820px) {
+      .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    }
+
+    .kpi {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 13px 16px;
+      box-shadow: var(--shadow);
+    }
+
+    .kpi-label {
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    .kpi-value {
+      margin-top: 4px;
+      font-size: 22px;
+      font-weight: 700;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .kpi-sub {
+      margin-top: 2px;
+      font-size: 11.5px;
+      color: var(--muted);
+    }
+
+    .cards {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 16px;
+    }
+
+    @media (max-width: 960px) {
+      .cards { grid-template-columns: minmax(0, 1fr); }
+    }
+
+    .node-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 16px;
+      box-shadow: var(--shadow);
+    }
+
+    .node-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      margin-bottom: 12px;
+    }
+
+    .node-title {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      min-width: 0;
+    }
+
+    .node-name {
+      font-size: 16px;
+      font-weight: 700;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .node-meta {
+      font-size: 11.5px;
+      color: var(--muted);
+    }
+
+    .badge {
+      font-size: 11.5px;
+      font-weight: 600;
+      padding: 3px 9px;
+      border-radius: 999px;
+      white-space: nowrap;
+    }
+
+    .badge-online {
+      background: rgba(34, 197, 94, 0.14);
+      color: var(--text-good);
+    }
+
+    .badge-offline {
+      background: rgba(244, 63, 94, 0.14);
+      color: var(--text-critical);
+    }
+
+    .dual-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
+    }
+
+    @media (max-width: 560px) {
+      .dual-grid { grid-template-columns: minmax(0, 1fr); }
+    }
+
+    .sub-box {
+      background: var(--sub-surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 10px 11px;
+      min-width: 0;
+    }
+
+    .sub-title {
+      font-size: 12px;
+      font-weight: 500;
+      color: var(--text-secondary);
+      margin-bottom: 9px;
+    }
+
+    .rows {
+      display: flex;
+      flex-direction: column;
+      gap: 9px;
+    }
+
+    .row {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      min-width: 0;
+    }
+
+    .row-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 6px;
+      font-size: 12.5px;
+    }
+
+    .row-name {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      min-width: 0;
+      color: var(--text-secondary);
+    }
+
+    .row-name span:last-child {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 999px;
+      flex: 0 0 auto;
+    }
+
+    .row-val {
+      font-weight: 600;
+      font-variant-numeric: tabular-nums;
+      white-space: nowrap;
+    }
+
+    .st-good { color: var(--text); }
+    .loss-accent-good { color: var(--text-good); }
+    .st-warn { color: var(--text-warn); }
+    .st-critical, .st-timeout { color: var(--text-critical); }
+    .st-empty { color: var(--muted); }
+
+    .bars {
+      display: grid;
+      grid-template-columns: repeat(var(--buckets, 20), minmax(0, 1fr));
+      gap: 2.5px;
+    }
+
+    .pill {
+      height: 11px;
+      border-radius: 2.5px;
+      background: var(--pill-empty);
+      transition: transform 0.12s ease;
+    }
+
+    .pill:hover { transform: scaleY(1.25); }
+    .pill.p-good { background: var(--pill-good); }
+    .pill.p-warn { background: var(--pill-warn); }
+    .pill.p-critical, .pill.p-timeout { background: var(--pill-critical); }
+    .pill.p-empty { background: var(--pill-empty); }
+
+    .card-footer {
+      margin-top: 9px;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      font-size: 11.5px;
+      color: var(--muted);
+    }
+
+    .empty-box {
+      background: var(--surface);
+      border: 1px dashed var(--border);
+      border-radius: 14px;
+      padding: 40px 20px;
+      text-align: center;
+      color: var(--text-secondary);
+    }
+
+    /* Tooltip */
+    #tip {
+      position: fixed;
+      z-index: 9999;
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity 0.1s ease;
+      background: rgba(15, 23, 42, 0.94);
+      color: #f8fafc;
+      border: 1px solid rgba(148, 163, 184, 0.25);
+      border-radius: 8px;
+      padding: 8px 11px;
+      font-size: 12px;
+      box-shadow: 0 10px 28px rgba(2, 6, 23, 0.35);
+      max-width: 270px;
+    }
+
+    #tip.show { opacity: 1; }
+    .tip-head { display: flex; justify-content: space-between; gap: 10px; font-weight: 600; margin-bottom: 2px; }
+    .tip-time { color: #94a3b8; font-size: 11px; margin-bottom: 5px; }
+    .tip-line { display: flex; justify-content: space-between; gap: 14px; font-variant-numeric: tabular-nums; }
+    .tip-k { color: #94a3b8; }
+
+    /* Admin Modal */
+    .modal-backdrop {
+      position: fixed;
+      inset: 0;
+      background: rgba(2, 6, 23, 0.55);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 5000;
+      padding: 16px;
+    }
+
+    .modal-backdrop.open { display: flex; }
+
+    .modal {
+      width: 100%;
+      max-width: 780px;
+      max-height: 86vh;
+      overflow-y: auto;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 18px 20px;
+      box-shadow: 0 24px 60px rgba(0, 0, 0, 0.35);
+    }
+
+    .modal-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 12px;
+    }
+
+    .modal-head h2 { margin: 0; font-size: 16px; }
+
+    .tabs {
+      display: flex;
+      gap: 6px;
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 10px;
+      margin-bottom: 14px;
+    }
+
+    .tab-btn {
+      border: 1px solid var(--border);
+      background: var(--sub-surface);
+      color: var(--text-secondary);
+      padding: 6px 12px;
+      border-radius: 8px;
+      font-size: 12.5px;
+      cursor: pointer;
+    }
+
+    .tab-btn.active {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: #fff;
+    }
+
+    .tbl {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 12.5px;
+    }
+
+    .tbl th, .tbl td {
+      border-bottom: 1px solid var(--border);
+      padding: 8px 6px;
+      text-align: left;
+    }
+
+    .tbl th { color: var(--muted); font-weight: 500; }
+
+    .tbl input, .tbl select {
+      width: 100%;
+      height: 30px;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+      background: var(--sub-surface);
+      color: var(--text);
+      padding: 0 8px;
+      font-size: 12px;
+    }
+
+    .node-checks {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin: 10px 0 14px;
+    }
+
+    .node-check {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      background: var(--sub-surface);
+      border: 1px solid var(--border);
+      padding: 5px 10px;
+      border-radius: 8px;
+      font-size: 12px;
+      cursor: pointer;
+    }
+
+    .toast {
+      margin-top: 10px;
+      padding: 8px 12px;
+      border-radius: 8px;
+      font-size: 12.5px;
+      display: none;
+    }
+
+    .toast.ok { display: block; background: rgba(34, 197, 94, 0.14); color: var(--text-good); }
+    .toast.err { display: block; background: rgba(244, 63, 94, 0.14); color: var(--text-critical); }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="topbar">
+      <div class="title-group">
+        <h1>延迟与丢包可用性监控</h1>
+        <p id="subtitle">基于 Komari 原生 Ping 任务时间分桶统计 · 灰色为无采样</p>
+      </div>
+      <div class="toolbar">
+        <div class="seg" id="hoursSeg">
+          <button data-hours="1" class="active">1h</button>
+          <button data-hours="3">3h</button>
+          <button data-hours="6">6h</button>
+          <button data-hours="12">12h</button>
+          <button data-hours="24">24h</button>
+        </div>
+        <input id="searchInput" class="input" type="search" placeholder="筛选节点或线路..." />
+        <button id="refreshBtn" class="btn">刷新</button>
+        <button id="themeBtn" class="btn">深/浅色</button>
+        <button id="adminBtn" class="btn btn-primary" style="display:none;">任务预设管理</button>
+      </div>
+    </div>
+
+    <div class="kpis">
+      <div class="kpi">
+        <div class="kpi-label">监控节点</div>
+        <div class="kpi-value" id="kpiNodes">-</div>
+        <div class="kpi-sub" id="kpiSeries">- 条监测线路</div>
+      </div>
+      <div class="kpi">
+        <div class="kpi-label">平均延迟</div>
+        <div class="kpi-value" id="kpiLatency">-</div>
+        <div class="kpi-sub" id="kpiWindow">当前统计窗口</div>
+      </div>
+      <div class="kpi">
+        <div class="kpi-label">整体可用率</div>
+        <div class="kpi-value" id="kpiAvail">-</div>
+        <div class="kpi-sub">有效探测占比</div>
+      </div>
+      <div class="kpi">
+        <div class="kpi-label">异常线路</div>
+        <div class="kpi-value" id="kpiAlerts">-</div>
+        <div class="kpi-sub">高延迟 / 高丢包 / 超时</div>
+      </div>
+    </div>
+
+    <div id="cardsRoot" class="cards"></div>
+  </div>
+
+  <div id="tip"></div>
+
+  <!-- Admin Task Preset Manager -->
+  <div class="modal-backdrop" id="adminModal">
+    <div class="modal">
+      <div class="modal-head">
+        <h2>Komari Ping 任务快捷管理</h2>
+        <button class="btn" id="closeModalBtn">关闭</button>
+      </div>
+      <div class="tabs">
+        <button class="tab-btn active" data-tab="three-net">三网 TCP 预设</button>
+        <button class="tab-btn" data-tab="mesh">节点互探生成</button>
+        <button class="tab-btn" data-tab="existing">现有任务列表</button>
+      </div>
+      <div id="modalBody"></div>
+      <div id="modalToast" class="toast"></div>
+    </div>
+  </div>
+
+  <script>
+    (function () {
+      "use strict";
+
+      var API_BASE = "/api/plugin/latency-monitor";
+      var state = {
+        hours: 1,
+        query: "",
+        summary: null,
+        adminData: null,
+        activeTab: "three-net",
+        timer: null
+      };
+
+      function esc(s) {
+        return String(s == null ? "" : s)
+          .replace(/&/g, "&amp;")
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;")
+          .replace(/"/g, "&quot;");
+      }
+
+      function pad2(n) { return n < 10 ? "0" + n : String(n); }
+      function fmtHM(ts) {
+        var d = new Date(ts);
+        return isNaN(d.getTime()) ? "" : pad2(d.getHours()) + ":" + pad2(d.getMinutes());
+      }
+
+      function fmtLat(tk) {
+        if (!tk || tk.totalSamples === 0) return "--";
+        if (tk.latestWasLoss && tk.latestLatency === null) return "超时";
+        var v = tk.latestLatency !== null ? tk.latestLatency : tk.avgLatency;
+        return v === null ? "超时" : v + " ms";
+      }
+
+      function fmtLoss(loss, samples) {
+        if (!samples || loss === null || loss === undefined) return "--";
+        var n = Number(loss);
+        if (!isFinite(n)) return "--";
+        if (n === 0) return "0 %";
+        if (n >= 10 || Number.isInteger(n)) return (n >= 10 ? Math.round(n) : n) + " %";
+        return n.toFixed(1) + " %";
+      }
+
+      function syncTheme() {
+        var saved = localStorage.getItem("klm-overview-theme");
+        var dark = false;
+        if (saved === "dark") dark = true;
+        else if (saved === "light") dark = false;
+        else {
+          try {
+            if (window.parent && window.parent !== window && window.parent.document.documentElement.classList.contains("dark")) {
+              dark = true;
+            } else if (window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches) {
+              dark = true;
+            }
+          } catch (_) {
+            dark = window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches;
+          }
+        }
+        document.body.classList.toggle("dark", dark);
+      }
+
+      function renderSummary() {
+        var data = state.summary;
+        if (!data) return;
+
+        var ov = data.overview || {};
+        document.getElementById("kpiNodes").textContent = ov.nodeCount != null ? ov.nodeCount : "-";
+        document.getElementById("kpiSeries").textContent = (ov.seriesCount || 0) + " 条监测线路 / " + (ov.taskCount || 0) + " 个任务";
+        document.getElementById("kpiLatency").textContent = ov.avgLatency != null ? ov.avgLatency + " ms" : "--";
+        document.getElementById("kpiWindow").textContent = "近 " + data.windowHours + " 小时 · " + data.bucketCount + " 个分桶";
+        document.getElementById("kpiAvail").textContent = ov.availabilityPercent != null ? ov.availabilityPercent.toFixed(2) + "%" : "--";
+        var alertEl = document.getElementById("kpiAlerts");
+        alertEl.textContent = ov.alertTaskCount != null ? ov.alertTaskCount : "0";
+        alertEl.style.color = ov.alertTaskCount > 0 ? "var(--text-critical)" : "var(--text-good)";
+
+        document.getElementById("subtitle").textContent =
+          "更新时间 " + new Date(data.generatedAt).toLocaleTimeString() + " · 每 " +
+          ((data.config && data.config.refreshIntervalSeconds) || 30) + " 秒自动刷新";
+
+        document.getElementById("adminBtn").style.display = data.isAdmin ? "inline-flex" : "none";
+
+        var q = state.query.trim().toLowerCase();
+        var nodes = (data.nodes || []).filter(function (n) {
+          if (!q) return true;
+          if (String(n.name || "").toLowerCase().indexOf(q) !== -1) return true;
+          return (n.tasks || []).some(function (t) {
+            return String(t.name || "").toLowerCase().indexOf(q) !== -1;
+          });
+        });
+
+        var root = document.getElementById("cardsRoot");
+        if (nodes.length === 0) {
+          root.innerHTML = '<div class="empty-box" style="grid-column:1/-1;">没有匹配的监控节点。</div>';
+          return;
+        }
+
+        var html = [];
+        for (var i = 0; i < nodes.length; i++) {
+          var node = nodes[i];
+          var tasks = node.tasks || [];
+          var badgeHtml = node.online
+            ? '<span class="badge badge-online">● 在线</span>'
+            : '<span class="badge badge-offline">● 离线</span>';
+
+          if (tasks.length === 0) {
+            html.push(
+              '<div class="node-card">' +
+                '<div class="node-head">' +
+                  '<div class="node-title"><span class="node-name">' + esc(node.name) + '</span><span class="node-meta">' + esc(node.os || "") + "</span></div>" +
+                  badgeHtml +
+                "</div>" +
+                '<div class="empty-box" style="padding:22px 12px;">该节点尚未绑定任何 Ping 监测任务' +
+                (data.isAdmin ? '，可点击右上角「任务预设管理」一键添加。' : "。") +
+                "</div>" +
+              "</div>"
+            );
+            continue;
+          }
+
+          var latRows = [];
+          var lossRows = [];
+          var availSum = 0;
+          var availCnt = 0;
+
+          for (var j = 0; j < tasks.length; j++) {
+            var tk = tasks[j];
+            if (tk.availabilityPercent != null) {
+              availSum += tk.availabilityPercent;
+              availCnt += 1;
+            }
+            var dot = '<span class="dot" style="background:' + esc(tk.dotColor) + '"></span>';
+            var label = '<span class="row-name">' + dot + "<span>" + esc(tk.name) + "</span></span>";
+            var latClass = "row-val st-" + esc(tk.latencyStatus);
+            var lossClass = "row-val st-" + esc(tk.lossStatus);
+            if (tk.lossStatus === "warn" && tk.lossPercent > 0 && tk.lossPercent < 5) {
+              lossClass = "row-val loss-accent-good";
+            }
+
+            var latPills = [];
+            var lossPills = [];
+            for (var b = 0; b < tk.buckets.length; b++) {
+              var bk = tk.buckets[b];
+              var payload = encodeURIComponent(JSON.stringify({
+                taskName: tk.name,
+                type: tk.type,
+                start: bk.start,
+                end: bk.end,
+                total: bk.total,
+                loss: bk.loss,
+                avgLatency: bk.avgLatency,
+                minLatency: bk.minLatency,
+                maxLatency: bk.maxLatency,
+                lossPercent: bk.lossPercent
+              }));
+              latPills.push('<span class="pill p-' + esc(bk.latencyStatus) + '" data-tip="' + payload + '"></span>');
+              lossPills.push('<span class="pill p-' + esc(bk.lossStatus) + '" data-tip="' + payload + '"></span>');
+            }
+
+            latRows.push(
+              '<div class="row">' +
+                '<div class="row-head">' + label + '<span class="' + latClass + '">' + esc(fmtLat(tk)) + "</span></div>" +
+                '<div class="bars" style="--buckets:' + data.bucketCount + '">' + latPills.join("") + "</div>" +
+              "</div>"
+            );
+            lossRows.push(
+              '<div class="row">' +
+                '<div class="row-head">' + label + '<span class="' + lossClass + '">' + esc(fmtLoss(tk.lossPercent, tk.totalSamples)) + "</span></div>" +
+                '<div class="bars" style="--buckets:' + data.bucketCount + '">' + lossPills.join("") + "</div>" +
+              "</div>"
+            );
+          }
+
+          var nodeAvail = availCnt > 0 ? "综合可用率 " + (availSum / availCnt).toFixed(2) + "%" : "暂无采样";
+          html.push(
+            '<div class="node-card">' +
+              '<div class="node-head">' +
+                '<div class="node-title"><span class="node-name">' + esc(node.name) + '</span><span class="node-meta">' + esc([node.os, node.arch].filter(Boolean).join(" · ")) + "</span></div>" +
+                badgeHtml +
+              "</div>" +
+              '<div class="dual-grid">' +
+                '<div class="sub-box"><div class="sub-title">延迟</div><div class="rows">' + latRows.join("") + "</div></div>" +
+                '<div class="sub-box"><div class="sub-title">丢包</div><div class="rows">' + lossRows.join("") + "</div></div>" +
+              "</div>" +
+              '<div class="card-footer">' +
+                "<span>" + esc(node.footerLabel) + "</span>" +
+                "<span>" + esc(nodeAvail) + "</span>" +
+              "</div>" +
+            "</div>"
+          );
+        }
+        root.innerHTML = html.join("");
+      }
+
+      function fetchSummary(force) {
+        var url = API_BASE + "/summary?hours=" + state.hours + (force ? "&refresh=1" : "");
+        fetch(url, { credentials: "same-origin", cache: "no-store" })
+          .then(function (r) { return r.json(); })
+          .then(function (j) {
+            if (j && j.status === "success" && j.data) {
+              state.summary = j.data;
+              renderSummary();
+              var sec = (j.data.config && j.data.config.refreshIntervalSeconds) || 30;
+              if (state.timer) clearInterval(state.timer);
+              state.timer = setInterval(function () {
+                if (!document.hidden) fetchSummary(false);
+              }, Math.max(10, sec) * 1000);
+            }
+          })
+          .catch(function (err) {
+            document.getElementById("cardsRoot").innerHTML =
+              '<div class="empty-box" style="grid-column:1/-1;">加载监控数据失败：' + esc(err && err.message ? err.message : err) + "</div>";
+          });
+      }
+
+      // Tooltip handling
+      var tipEl = document.getElementById("tip");
+      document.addEventListener("mouseover", function (e) {
+        var pill = e.target;
+        if (!pill || !pill.classList || !pill.classList.contains("pill")) return;
+        var raw = pill.getAttribute("data-tip");
+        if (!raw) return;
+        try {
+          var d = JSON.parse(decodeURIComponent(raw));
+          var body = !d.total
+            ? '<div class="tip-line"><span class="tip-k">状态</span><span>该时段无采样</span></div>'
+            : '<div class="tip-line"><span class="tip-k">延迟</span><span>' +
+              (d.avgLatency != null ? d.avgLatency + " ms" + (d.minLatency !== d.maxLatency ? " (" + d.minLatency + "~" + d.maxLatency + ")" : "") : "全部超时") +
+              "</span></div>" +
+              '<div class="tip-line"><span class="tip-k">丢包</span><span>' + d.lossPercent + "% (" + d.loss + "/" + d.total + ")</span></div>";
+          tipEl.innerHTML =
+            '<div class="tip-head"><span>' + esc(d.taskName) + "</span><span>" + esc(d.type) + "</span></div>" +
+            '<div class="tip-time">' + fmtHM(d.start) + " – " + fmtHM(d.end) + "</div>" + body;
+          tipEl.classList.add("show");
+          var r = pill.getBoundingClientRect();
+          var tr = tipEl.getBoundingClientRect();
+          var left = Math.max(8, Math.min(window.innerWidth - tr.width - 8, r.left + r.width / 2 - tr.width / 2));
+          var top = r.top - tr.height - 8;
+          if (top < 8) top = r.bottom + 8;
+          tipEl.style.left = Math.round(left) + "px";
+          tipEl.style.top = Math.round(top) + "px";
+        } catch (_) {}
+      }, true);
+
+      document.addEventListener("mouseout", function (e) {
+        if (e.target && e.target.classList && e.target.classList.contains("pill")) {
+          tipEl.classList.remove("show");
+        }
+      }, true);
+
+      // Admin modal logic
+      function showToast(msg, ok) {
+        var el = document.getElementById("modalToast");
+        el.textContent = msg;
+        el.className = "toast " + (ok ? "ok" : "err");
+      }
+
+      function clearToast() {
+        var el = document.getElementById("modalToast");
+        el.className = "toast";
+        el.textContent = "";
+      }
+
+      function loadAdminData() {
+        clearToast();
+        return fetch(API_BASE + "/admin/tasks", { credentials: "same-origin", cache: "no-store" })
+          .then(function (r) { return r.json(); })
+          .then(function (j) {
+            if (j && j.status === "success") {
+              state.adminData = j.data;
+              renderAdminTab();
+            } else {
+              showToast((j && j.message) || "加载管理数据失败", false);
+            }
+          });
+      }
+
+      function renderAdminTab() {
+        var d = state.adminData;
+        var body = document.getElementById("modalBody");
+        if (!d) {
+          body.innerHTML = "<p>正在加载...</p>";
+          return;
+        }
+        var nodes = d.nodes || [];
+
+        if (state.activeTab === "three-net") {
+          var presets = d.presets || [];
+          var nodeChecks = nodes.map(function (n) {
+            return '<label class="node-check"><input type="checkbox" name="tnNode" value="' + esc(n.uuid) + '" checked />' + esc(n.name) + "</label>";
+          }).join("");
+          var rows = presets.map(function (p, idx) {
+            return (
+              '<tr data-preset="' + idx + '">' +
+                '<td><input type="checkbox" class="tn-enable" checked style="width:auto;" /></td>' +
+                '<td><input type="text" class="tn-name" value="' + esc(p.name) + '" /></td>' +
+                '<td><select class="tn-type"><option value="tcp"' + (p.type === "tcp" ? " selected" : "") + '>TCP</option><option value="icmp"' + (p.type === "icmp" ? " selected" : "") + '>ICMP</option><option value="http"' + (p.type === "http" ? " selected" : "") + '>HTTP</option></select></td>' +
+                '<td><input type="text" class="tn-target" value="' + esc(p.target) + '" placeholder="IP:Port 或域名" /></td>' +
+                '<td><input type="number" class="tn-interval" value="' + esc(p.interval) + '" min="10" max="3600" /></td>' +
+              "</tr>"
+            );
+          }).join("");
+
+          body.innerHTML =
+            '<div style="font-size:12.5px;color:var(--text-secondary);">为选中的节点批量创建三网探测任务（建议先确认目标 IP:端口 可达，间隔 30~60 秒）：</div>' +
+            '<div class="node-checks">' + (nodeChecks || "<span>暂无节点</span>") + "</div>" +
+            '<table class="tbl"><thead><tr><th style="width:36px;">启用</th><th>名称</th><th style="width:88px;">协议</th><th>探测目标 (Host:Port)</th><th style="width:82px;">间隔(秒)</th></tr></thead><tbody>' +
+            rows + "</tbody></table>" +
+            '<div style="margin-top:14px;display:flex;justify-content:flex-end;gap:8px;">' +
+              '<button class="btn btn-primary" id="submitThreeNetBtn">一键创建三网任务</button>' +
+            "</div>";
+
+          document.getElementById("submitThreeNetBtn").onclick = function () {
+            clearToast();
+            var selectedClients = Array.prototype.slice.call(document.querySelectorAll('input[name="tnNode"]:checked')).map(function (el) { return el.value; });
+            var tasks = [];
+            var trs = body.querySelectorAll("tbody tr");
+            for (var i = 0; i < trs.length; i++) {
+              if (!trs[i].querySelector(".tn-enable").checked) continue;
+              tasks.push({
+                name: trs[i].querySelector(".tn-name").value.trim(),
+                type: trs[i].querySelector(".tn-type").value,
+                target: trs[i].querySelector(".tn-target").value.trim(),
+                interval: Number(trs[i].querySelector(".tn-interval").value) || 60,
+                clients: selectedClients,
+                default_on: false
+              });
+            }
+            submitTasks({ tasks: tasks, skipDuplicates: true });
+          };
+          return;
+        }
+
+        if (state.activeTab === "mesh") {
+          var mRows = nodes.map(function (n) {
+            var ip = n.ipv4 || n.ipv6 || "";
+            return (
+              '<tr data-uuid="' + esc(n.uuid) + '">' +
+                '<td><input type="checkbox" class="mesh-enable" checked style="width:auto;" /></td>' +
+                '<td><input type="text" class="mesh-name" value="' + esc(n.name) + '" /></td>' +
+                '<td><input type="text" class="mesh-host" value="' + esc(ip) + '" placeholder="节点公网 IP 或域名" /></td>' +
+                '<td><input type="number" class="mesh-port" value="443" min="1" max="65535" /></td>' +
+              "</tr>"
+            );
+          }).join("");
+
+          body.innerHTML =
+            '<div style="font-size:12.5px;color:var(--text-secondary);margin-bottom:10px;">自动为勾选的节点两两生成双向探测任务（如 A → B 与 B → A，使用各节点开放的 TCP 端口，如 443 / SSH 端口）：</div>' +
+            '<table class="tbl"><thead><tr><th style="width:36px;">参与</th><th>展示简称</th><th>目标 IP / 域名</th><th style="width:90px;">TCP 端口</th></tr></thead><tbody>' +
+            mRows + "</tbody></table>" +
+            '<div style="margin-top:12px;display:flex;align-items:center;justify-content:space-between;gap:10px;">' +
+              '<label style="font-size:12.5px;">探测间隔（秒）：<input id="meshInterval" class="input" type="number" value="60" min="10" max="3600" style="width:84px;margin-left:6px;" /></label>' +
+              '<button class="btn btn-primary" id="submitMeshBtn">一键生成节点互探任务</button>' +
+            "</div>";
+
+          document.getElementById("submitMeshBtn").onclick = function () {
+            clearToast();
+            var meshNodes = [];
+            var trs = body.querySelectorAll("tbody tr");
+            for (var i = 0; i < trs.length; i++) {
+              if (!trs[i].querySelector(".mesh-enable").checked) continue;
+              meshNodes.push({
+                uuid: trs[i].getAttribute("data-uuid"),
+                name: trs[i].querySelector(".mesh-name").value.trim(),
+                host: trs[i].querySelector(".mesh-host").value.trim(),
+                port: Number(trs[i].querySelector(".mesh-port").value) || 443
+              });
+            }
+            submitTasks({
+              mode: "mesh",
+              type: "tcp",
+              interval: Number(document.getElementById("meshInterval").value) || 60,
+              nodes: meshNodes,
+              skipDuplicates: true
+            });
+          };
+          return;
+        }
+
+        // existing tasks
+        var tasks = d.tasks || [];
+        if (tasks.length === 0) {
+          body.innerHTML = '<div class="empty-box" style="padding:24px;">当前 Komari 尚未创建任何 Ping 任务。</div>';
+          return;
+        }
+        var tRows = tasks.map(function (t) {
+          var cnt = Array.isArray(t.clients) ? t.clients.length : 0;
+          return (
+            "<tr>" +
+              "<td>" + esc(t.id) + "</td>" +
+              "<td>" + esc(t.name) + "</td>" +
+              "<td>" + esc(String(t.type || "").toUpperCase()) + "</td>" +
+              "<td><code>" + esc(t.target) + "</code></td>" +
+              "<td>" + esc(t.interval) + "s</td>" +
+              "<td>" + cnt + " 台</td>" +
+              '<td><button class="btn btn-danger del-task-btn" data-id="' + esc(t.id) + '">删除</button></td>' +
+            "</tr>"
+          );
+        }).join("");
+
+        body.innerHTML =
+          '<table class="tbl"><thead><tr><th>ID</th><th>名称</th><th>协议</th><th>目标</th><th>间隔</th><th>节点数</th><th>操作</th></tr></thead><tbody>' +
+          tRows + "</tbody></table>";
+
+        var delBtns = body.querySelectorAll(".del-task-btn");
+        for (var k = 0; k < delBtns.length; k++) {
+          delBtns[k].onclick = function () {
+            var id = Number(this.getAttribute("data-id"));
+            fetch(API_BASE + "/admin/tasks/delete", {
+              method: "POST",
+              credentials: "same-origin",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ ids: [id] })
+            })
+              .then(function (r) { return r.json(); })
+              .then(function (j) {
+                if (j && j.status === "success") {
+                  showToast("已删除任务 #" + id, true);
+                  loadAdminData();
+                  fetchSummary(true);
+                } else {
+                  showToast((j && j.message) || "删除失败", false);
+                }
+              });
+          };
+        }
+      }
+
+      function submitTasks(payload) {
+        fetch(API_BASE + "/admin/tasks", {
+          method: "POST",
+          credentials: "same-origin",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload)
+        })
+          .then(function (r) { return r.json(); })
+          .then(function (j) {
+            if (j && j.status === "success") {
+              var created = (j.data && j.data.created) ? j.data.created.length : 0;
+              var skipped = (j.data && j.data.skippedCount) || 0;
+              showToast("成功创建 " + created + " 个任务" + (skipped ? "（跳过重复 " + skipped + " 个）" : "") + "。等待 1~2 个探测周期后即可看到胶囊条。", true);
+              loadAdminData();
+              fetchSummary(true);
+            } else {
+              showToast((j && j.message) || "创建失败", false);
+            }
+          })
+          .catch(function (err) {
+            showToast("请求失败：" + err.message, false);
+          });
+      }
+
+      // Bind controls
+      document.getElementById("hoursSeg").onclick = function (e) {
+        var btn = e.target.closest("button[data-hours]");
+        if (!btn) return;
+        state.hours = Number(btn.getAttribute("data-hours")) || 1;
+        var all = document.querySelectorAll("#hoursSeg button");
+        for (var i = 0; i < all.length; i++) all[i].classList.toggle("active", all[i] === btn);
+        fetchSummary(true);
+      };
+
+      document.getElementById("searchInput").oninput = function (e) {
+        state.query = e.target.value || "";
+        renderSummary();
+      };
+
+      document.getElementById("refreshBtn").onclick = function () { fetchSummary(true); };
+      document.getElementById("themeBtn").onclick = function () {
+        var next = !document.body.classList.contains("dark");
+        document.body.classList.toggle("dark", next);
+        localStorage.setItem("klm-overview-theme", next ? "dark" : "light");
+      };
+
+      var modal = document.getElementById("adminModal");
+      document.getElementById("adminBtn").onclick = function () {
+        modal.classList.add("open");
+        loadAdminData();
+      };
+      document.getElementById("closeModalBtn").onclick = function () { modal.classList.remove("open"); };
+      modal.onclick = function (e) { if (e.target === modal) modal.classList.remove("open"); };
+
+      var tabBtns = document.querySelectorAll(".tab-btn");
+      for (var t = 0; t < tabBtns.length; t++) {
+        tabBtns[t].onclick = function () {
+          state.activeTab = this.getAttribute("data-tab");
+          for (var j = 0; j < tabBtns.length; j++) tabBtns[j].classList.toggle("active", tabBtns[j] === this);
+          clearToast();
+          renderAdminTab();
+        };
+      }
+
+      syncTheme();
+      fetchSummary(false);
+    })();
+  </script>
+</body>
+</html>

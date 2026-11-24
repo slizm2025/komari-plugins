@@ -1,0 +1,205 @@
+{
+  "name": {
+    "zh_CN": "Telegram 状态查询机器人",
+    "zh-CN": "Telegram 状态查询机器人",
+    "en": "Telegram Status Bot"
+  },
+  "short": "tg-bot",
+  "description": {
+    "zh_CN": "内嵌于 Komari 的轻量 Telegram 双向机器人（无需额外容器或公网回调）：发 /status、/ping、/traffic 或点快捷按钮实时查询各 VPS 的 CPU/内存、三网延迟丢包与月度剩余流量，支持定时日报与流量/离线/丢包告警。",
+    "zh-CN": "内嵌于 Komari 的轻量 Telegram 双向机器人（无需额外容器或公网回调）：发 /status、/ping、/traffic 或点快捷按钮实时查询各 VPS 的 CPU/内存、三网延迟丢包与月度剩余流量，支持定时日报与流量/离线/丢包告警。",
+    "en": "Lightweight embedded Telegram Bot for Komari (no extra container or webhook needed): query CPU/RAM, latency & packet loss, and monthly traffic quota interactively via /status, /ping, /traffic, inline buttons, daily reports, and proactive alerts."
+  },
+  "author": "slizm",
+  "version": "1.0.2",
+  "komari": ">=1.5.0",
+  "entry": "script.js",
+  "permissions": {
+    "node": false,
+    "allowSystemRPC": true,
+    "allowRoutes": true,
+    "allowHTMLInject": false,
+    "timeout": 60,
+    "maxHTTPBodyBytes": 262144
+  },
+  "configuration": {
+    "type": "managed",
+    "data": [
+      {
+        "type": "title",
+        "name": {
+          "zh_CN": "Telegram 机器人基础配置",
+          "zh-CN": "Telegram 机器人基础配置",
+          "en": "Telegram Bot Settings"
+        }
+      },
+      {
+        "key": "bot_token",
+        "type": "string",
+        "default": "",
+        "required": true,
+        "name": {
+          "zh_CN": "Bot Token（从 @BotFather 获取）",
+          "zh-CN": "Bot Token（从 @BotFather 获取）",
+          "en": "Bot Token (from @BotFather)"
+        },
+        "help": {
+          "zh_CN": "形如 123456789:AAHxxxxxxxxxxxxxxxxxxxxxxxxx",
+          "zh-CN": "形如 123456789:AAHxxxxxxxxxxxxxxxxxxxxxxxxx",
+          "en": "Format: 123456789:AAHxxxxxxxxxxxxxxxxxxxxxxxxx"
+        }
+      },
+      {
+        "key": "allowed_chat_ids",
+        "type": "string",
+        "default": "",
+        "name": {
+          "zh_CN": "允许访问的 Chat ID（英文逗号分隔）",
+          "zh-CN": "允许访问的 Chat ID（英文逗号分隔）",
+          "en": "Allowed Chat IDs (comma-separated)"
+        },
+        "help": {
+          "zh_CN": "仅白名单内的 Chat ID 可查询 VPS 数据和接收告警；不知道自己 ID 时可先留空保存，然后给机器人发 /id 获取后再填入",
+          "zh-CN": "仅白名单内的 Chat ID 可查询 VPS 数据和接收告警；不知道自己 ID 时可先留空保存，然后给机器人发 /id 获取后再填入",
+          "en": "Strict whitelist for queries and alerts. Leave empty first and send /id to the bot to discover your Chat ID."
+        }
+      },
+      {
+        "key": "api_base",
+        "type": "string",
+        "default": "https://api.telegram.org",
+        "name": {
+          "zh_CN": "Telegram API 地址（默认官方地址）",
+          "zh-CN": "Telegram API 地址（默认官方地址）",
+          "en": "Telegram API Base URL"
+        },
+        "help": {
+          "zh_CN": "海外 VPS 直接保持默认 https://api.telegram.org 即可",
+          "zh-CN": "海外 VPS 直接保持默认 https://api.telegram.org 即可",
+          "en": "Keep https://api.telegram.org on overseas VPSes"
+        }
+      },
+      {
+        "key": "poll_enabled",
+        "type": "switch",
+        "default": true,
+        "name": {
+          "zh_CN": "启用双向交互指令轮询（/status /ping /traffic）",
+          "zh-CN": "启用双向交互指令轮询（/status /ping /traffic）",
+          "en": "Enable Interactive Command Polling"
+        },
+        "help": {
+          "zh_CN": "使用 getUpdates 长轮询（纯出站），关闭后仅保留定时日报和告警推送",
+          "zh-CN": "使用 getUpdates 长轮询（纯出站），关闭后仅保留定时日报和告警推送",
+          "en": "Uses outbound long-polling (no webhook needed). Disable for push-only mode."
+        }
+      },
+      {
+        "type": "title",
+        "name": {
+          "zh_CN": "定时状态汇总日报",
+          "zh-CN": "定时状态汇总日报",
+          "en": "Scheduled Daily Report"
+        }
+      },
+      {
+        "key": "daily_report_enabled",
+        "type": "switch",
+        "default": true,
+        "name": {
+          "zh_CN": "开启每日定时状态汇总推送",
+          "zh-CN": "开启每日定时状态汇总推送",
+          "en": "Enable Daily Summary Report"
+        },
+        "help": {
+          "zh_CN": "按下方 Cron 计划向白名单 Chat ID 推送完整 VPS 状态、三网延迟与月度剩余流量",
+          "zh-CN": "按下方 Cron 计划向白名单 Chat ID 推送完整 VPS 状态、三网延迟与月度剩余流量",
+          "en": "Sends full VPS status, latency, and remaining monthly traffic on schedule"
+        }
+      },
+      {
+        "key": "daily_report_cron",
+        "type": "string",
+        "default": "0 9 * * *",
+        "name": {
+          "zh_CN": "定时汇总 Cron 表达式",
+          "zh-CN": "定时汇总 Cron 表达式",
+          "en": "Daily Report Cron Expression"
+        },
+        "help": {
+          "zh_CN": "标准 5 段 Cron（按面板时区，默认每天早 9:00：0 9 * * *）",
+          "zh-CN": "标准 5 段 Cron（按面板时区，默认每天早 9:00：0 9 * * *）",
+          "en": "5-field cron expression in server timezone (default: 0 9 * * *)"
+        }
+      },
+      {
+        "type": "title",
+        "name": {
+          "zh_CN": "主动异常告警（每 5 分钟巡检）",
+          "zh-CN": "主动异常告警（每 5 分钟巡检）",
+          "en": "Proactive Alerts (5-minute check)"
+        }
+      },
+      {
+        "key": "alert_enabled",
+        "type": "switch",
+        "default": true,
+        "name": {
+          "zh_CN": "启用主动告警（离线恢复 + 月流量预警 + 丢包告警）",
+          "zh-CN": "启用主动告警（离线恢复 + 月流量预警 + 丢包告警）",
+          "en": "Enable Proactive Alerts"
+        },
+        "help": {
+          "zh_CN": "检测节点离线/恢复、月流量达到 80%/95%/100% 时自动推送提醒",
+          "zh-CN": "检测节点离线/恢复、月流量达到 80%/95%/100% 时自动推送提醒",
+          "en": "Alerts on offline/recovery and monthly traffic quota thresholds"
+        }
+      },
+      {
+        "key": "alert_loss_nodes",
+        "type": "string",
+        "default": "",
+        "name": {
+          "zh_CN": "开启高丢包告警的节点名（英文逗号分隔，留空则不告警丢包）",
+          "zh-CN": "开启高丢包告警的节点名（英文逗号分隔，留空则不告警丢包）",
+          "en": "Nodes Monitored for Packet Loss Alerts (comma-separated)"
+        },
+        "help": {
+          "zh_CN": "建议仅填主力优化节点名（如 LA），避免普通线路日常高丢包反复刷屏",
+          "zh-CN": "建议仅填主力优化节点名（如 LA），避免普通线路日常高丢包反复刷屏",
+          "en": "Recommended: list only primary low-loss nodes (e.g. LA) to avoid alert fatigue"
+        }
+      },
+      {
+        "key": "alert_loss_percent",
+        "type": "number",
+        "default": 20,
+        "name": {
+          "zh_CN": "丢包告警阈值（%）",
+          "zh-CN": "丢包告警阈值（%）",
+          "en": "Packet Loss Alert Threshold (%)"
+        },
+        "help": {
+          "zh_CN": "仅对上方配置的节点生效：近 1 小时某线路丢包率达到此值时触发告警（默认 20%）",
+          "zh-CN": "仅对上方配置的节点生效：近 1 小时某线路丢包率达到此值时触发告警（默认 20%）",
+          "en": "Triggers when 1h packet loss reaches this percentage on watched nodes"
+        }
+      },
+      {
+        "key": "alert_cooldown_minutes",
+        "type": "number",
+        "default": 60,
+        "name": {
+          "zh_CN": "同类告警冷却时间（分钟）",
+          "zh-CN": "同类告警冷却时间（分钟）",
+          "en": "Alert Cooldown (Minutes)"
+        },
+        "help": {
+          "zh-CN": "同一节点的同一异常在冷却时间内不重复推送（默认 60 分钟）",
+          "en": "Minimum minutes between repeated alerts of the same kind per node"
+        }
+      }
+    ]
+  },
+  "url": "https://github.com/slizm2025/komari-plugins"
+}

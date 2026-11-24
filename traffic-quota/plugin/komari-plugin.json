@@ -1,0 +1,147 @@
+{
+  "name": {
+    "zh_CN": "月度流量配额监控",
+    "zh-CN": "月度流量配额监控",
+    "en": "Monthly Traffic Quota Monitor"
+  },
+  "short": "traffic-quota",
+  "description": {
+    "zh_CN": "按每台 VPS 独立配置的每月重置日、月流量上限与计费方向（双向/出站/入站/取大），通过防重启清零的本地持久化账本精准统计本期已用流量与剩余流量，支持首页卡片进度条注入与独立看板管理。",
+    "zh-CN": "按每台 VPS 独立配置的每月重置日、月流量上限与计费方向（双向/出站/入站/取大），通过防重启清零的本地持久化账本精准统计本期已用流量与剩余流量，支持首页卡片进度条注入与独立看板管理。",
+    "en": "Tracks per-VPS monthly traffic usage and remaining quota with independent billing reset day, billing mode (sum/out/in/max), reboot-safe persistent ledger, homepage card progress bar injection, and a standalone overview/config page."
+  },
+  "author": "slizm",
+  "version": "1.0.4",
+  "komari": ">=1.5.0",
+  "entry": "script.js",
+  "permissions": {
+    "node": true,
+    "allowSystemRPC": true,
+    "allowRoutes": true,
+    "allowHTMLInject": true,
+    "timeout": 30,
+    "maxHTTPBodyBytes": 262144
+  },
+  "configuration": {
+    "type": "managed",
+    "data": [
+      {
+        "type": "title",
+        "name": {
+          "zh_CN": "全局统计与展示设置（各节点独立额度请在「月度流量配额」页面配置）",
+          "zh-CN": "全局统计与展示设置（各节点独立额度请在「月度流量配额」页面配置）",
+          "en": "Global Settings (Configure per-node quotas in the Traffic Quota page)"
+        }
+      },
+      {
+        "key": "timezone_offset",
+        "type": "number",
+        "default": 8,
+        "name": {
+          "zh_CN": "账单日基准时区（UTC 偏移小时，默认 8 = 北京时间）",
+          "zh-CN": "账单日基准时区（UTC 偏移小时，默认 8 = 北京时间）",
+          "en": "Billing Timezone Offset (Hours from UTC, default 8)"
+        },
+        "help": {
+          "zh_CN": "决定每日切日与每月账单重置日的计算时区，中国用户保持 8，美西账单日可设为 -8 或 0",
+          "zh-CN": "决定每日切日与每月账单重置日的计算时区，中国用户保持 8，美西账单日可设为 -8 或 0",
+          "en": "Timezone offset used to compute daily rollover and monthly reset dates"
+        }
+      },
+      {
+        "key": "unit_base",
+        "type": "select",
+        "options": "1024,1000",
+        "default": "1024",
+        "name": {
+          "zh_CN": "流量单位换算进制（1024 = GiB，1000 = GB）",
+          "zh-CN": "流量单位换算进制（1024 = GiB，1000 = GB）",
+          "en": "Unit Base (1024 = GiB, 1000 = GB)"
+        },
+        "help": {
+          "zh_CN": "不同 VPS 商家按 1024(GiB) 或 1000(GB) 计费，按需选择以对齐商家面板数值",
+          "zh-CN": "不同 VPS 商家按 1024(GiB) 或 1000(GB) 计费，按需选择以对齐商家面板数值",
+          "en": "Choose 1024 (binary GiB) or 1000 (decimal GB) to match your VPS provider"
+        }
+      },
+      {
+        "key": "inject_home_cards",
+        "type": "switch",
+        "default": true,
+        "name": {
+          "zh_CN": "在首页节点卡片注入月流量进度条与剩余量",
+          "zh-CN": "在首页节点卡片注入月流量进度条与剩余量",
+          "en": "Inject Monthly Quota Bar into Homepage Cards"
+        },
+        "help": {
+          "zh-CN": "仅对已启用并配置了月度额度的节点在卡片中显示，兼容延迟与丢包插件同卡共存",
+          "en": "Shown only on nodes with an active monthly quota rule; coexists with latency-monitor"
+        }
+      },
+      {
+        "key": "refresh_interval_seconds",
+        "type": "number",
+        "default": 30,
+        "name": {
+          "zh_CN": "前端自动刷新间隔（秒）",
+          "zh-CN": "前端自动刷新间隔（秒）",
+          "en": "Frontend Refresh Interval (Seconds)"
+        },
+        "help": {
+          "zh-CN": "首页卡片与独立总览页的刷新间隔（默认 30 秒，切后台自动暂停）",
+          "en": "Polling interval in seconds (default 30, pauses when tab is hidden)"
+        }
+      },
+      {
+        "key": "warn_percent",
+        "type": "number",
+        "default": 80,
+        "name": {
+          "zh_CN": "用量预警阈值（%，黄色）",
+          "zh-CN": "用量预警阈值（%，黄色）",
+          "en": "Warning Threshold (%)"
+        },
+        "help": {
+          "zh-CN": "本月用量达到该百分比时进度条变为黄色（默认 80%）",
+          "en": "Progress bar turns amber at or above this usage percentage"
+        }
+      },
+      {
+        "key": "critical_percent",
+        "type": "number",
+        "default": 95,
+        "name": {
+          "zh-CN": "用量告警阈值（%，红色）",
+          "en": "Critical Threshold (%)"
+        },
+        "help": {
+          "zh-CN": "本月用量达到该百分比或超限时进度条变为红色（默认 95%）",
+          "en": "Progress bar turns red at or above this usage percentage"
+        }
+      }
+    ]
+  },
+  "pages": [
+    {
+      "file": "pages/index.html",
+      "title": {
+        "zh_CN": "月度流量配额",
+        "zh-CN": "月度流量配额",
+        "en": "Traffic Quota"
+      },
+      "type": "iframe",
+      "visibility": "admin"
+    },
+    {
+      "file": "pages/index.html",
+      "title": {
+        "zh_CN": "月度流量配额",
+        "zh-CN": "月度流量配额",
+        "en": "Traffic Quota"
+      },
+      "type": "iframe",
+      "visibility": "public"
+    }
+  ],
+  "url": "https://github.com/slizm2025/komari-plugins"
+}
